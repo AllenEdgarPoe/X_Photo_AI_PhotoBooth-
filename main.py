@@ -6,9 +6,23 @@ from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QComboBo
 from PyQt5.QtCore import pyqtSlot, QTimer, QThread, pyqtSignal
 from PyQt5.QtGui import QImage, QPixmap
 import os
-from td_api import transform_image
+from comfyui_api import transform_image
 from PIL import Image
 import numpy as np
+import configparser
+
+setting = configparser.ConfigParser()
+setting.read('config.ini')
+workflow_dir = setting['DIR']['WORKFLOW_DIR']
+result_dir = setting['DIR']['RESULT_DIR']
+
+
+os.makedirs(os.path.join(result_dir,'ori'), exist_ok=True)
+os.makedirs(os.path.join(result_dir,'full'), exist_ok=True)
+os.makedirs(os.path.join(result_dir,'processed'), exist_ok=True)
+
+modes = dict(setting['MODE_LIST'])
+
 
 class ImageProcessor(QThread):
     finished = pyqtSignal(object)  # Signal to indicate processing is done
@@ -20,38 +34,16 @@ class ImageProcessor(QThread):
 
 
     def run(self):
-        if self.option == '타로카드':
-            workflow_path =r'C:\Users\chsjk\PycharmProjects\ComfyUI_windows_portable\ComfyUI\work__flow\api\tarrotcard_api.json'
-            img = transform_image(workflow_path, self.img_path)
-        elif self.option == '큐티':
-            workflow_path =r'C:\Users\chsjk\PycharmProjects\ComfyUI_windows_portable\ComfyUI\work__flow\api\cutify_api.json'
-            img = transform_image(workflow_path, self.img_path)
-        elif self.option == '대충그림':
-            workflow_path =r'C:\Users\chsjk\PycharmProjects\ComfyUI_windows_portable\ComfyUI\work__flow\api\mspaint_api.json'
-            img = transform_image(workflow_path, self.img_path)
-        elif self.option == '지점토':
-            workflow_path =r'C:\Users\chsjk\PycharmProjects\ComfyUI_windows_portable\ComfyUI\work__flow\api\claymate_api.json'
-            img = transform_image(workflow_path, self.img_path)
-        elif self.option == '요정나라':
-            workflow_path = r'C:\Users\chsjk\PycharmProjects\ComfyUI_windows_portable\ComfyUI\work__flow\api\default_api.json'
-            img = transform_image(workflow_path, self.img_path, styler='misc-fairy tale')
-        elif self.option == '핑크우먼':
-            workflow_path =r'C:\Users\chsjk\PycharmProjects\ComfyUI_windows_portable\ComfyUI\work__flow\api\prettygirl_api.json'
-            img = transform_image(workflow_path, self.img_path)
-        elif self.option == '르네상스':
-            workflow_path =r'C:\Users\chsjk\PycharmProjects\ComfyUI_windows_portable\ComfyUI\work__flow\api\renaissance_api.json'
-            img = transform_image(workflow_path, self.img_path)
-        elif self.option == '외계인석상':
-            workflow_path =r'C:\Users\chsjk\PycharmProjects\ComfyUI_windows_portable\ComfyUI\work__flow\api\alien_turbo_api.json'
-            img = transform_image(workflow_path, self.img_path)
-        elif self.option == '사이버펑크':
-            workflow_path =r'C:\Users\chsjk\PycharmProjects\ComfyUI_windows_portable\ComfyUI\work__flow\api\default_api.json'
-            img = transform_image(workflow_path, self.img_path, styler='futuristic-retro cyberpunk')
+        file_name = self.img_path.split('\\')[-1]
 
+        if modes[self.option] in os.listdir(workflow_dir):
+            workflow_path = os.path.join(workflow_dir, modes[self.option])
+            img = transform_image(workflow_path, self.img_path)
 
         else:
             img = Image.open(self.img_path)
 
+        img.save(os.path.join(result_dir, 'processed', file_name))
         def get_concat_v(im1, im2):
             n_width = im1.width
             n_height = n_width * im2.height // im2.width
@@ -64,9 +56,7 @@ class ImageProcessor(QThread):
 
         ori = Image.open(self.img_path)
         full_img = get_concat_v(ori, img)
-
-        file_name = self.img_path.split('\\')[-1]
-        full_img.save(os.path.join(r'C:\Users\chsjk\PycharmProjects\ComfyUI_windows_portable\ComfyUI\work__flow\api\result\full', file_name))
+        full_img.save(os.path.join(result_dir,'full', file_name))
 
 
         self.finished.emit(full_img)
@@ -131,7 +121,7 @@ class WebcamApp(QWidget):
 
         # Dropdown for resize options
         self.resize_dropdown = QComboBox(self)
-        self.resize_dropdown.addItems(['핑크우먼', '르네상스', '외계인석상', '타로카드', '지점토', '사이버펑크', '요정나라', '큐티', '대충그림'])
+        self.resize_dropdown.addItems(list(modes.keys()))
         self.resize_dropdown.setStyleSheet("QComboBox { combobox-popup: 0; }")
 
         # Button for taking a photo
@@ -185,7 +175,7 @@ class WebcamApp(QWidget):
             frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
             file_date = datetime.today().strftime("%Y_%m%d_%H_%M_%S")
-            img_path = os.path.join(r'C:\Users\chsjk\PycharmProjects\ComfyUI_windows_portable\ComfyUI\work__flow\api\result\ori',"face_" + file_date + ".png")
+            img_path = os.path.join(result_dir, 'ori', "face_" + file_date + ".png")
             frame.save(img_path)
 
             self.image_processor = ImageProcessor(img_path, resize_option)
